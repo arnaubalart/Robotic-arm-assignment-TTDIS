@@ -19,7 +19,7 @@ public class IK_Calculator
         float wy = wristTarget.y;
         float wz = wristTarget.z;
 
-        // Ipotenusa 
+        // Hyp 
         float hyp = Mathf.Sqrt((wx * wx) + (wz * wz));
         float a = Mathf.Sqrt((hyp * hyp) + Mathf.Pow(wy - L1, 2));
 
@@ -32,7 +32,7 @@ public class IK_Calculator
         float interiorY3 = Mathf.Acos(cosY3) * Mathf.Rad2Deg;
         float y3 = -(180f - interiorY3);
 
-        // --- GIUNTO 2 (SHOULDER) ---
+        // ---  (SHOULDER) ---
         float y22 = Mathf.Atan2(wy - L1, hyp) * Mathf.Rad2Deg;
         float cosY23 = (Mathf.Pow(a, 2) + Mathf.Pow(L2, 2) - Mathf.Pow(L3, 2)) / (2.0f * a * L2);
         cosY23 = Mathf.Clamp(cosY23, -1f, 1f);

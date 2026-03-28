@@ -1,4 +1,3 @@
-using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,9 +8,71 @@ public class SimulationUI : MonoBehaviour
     public GameObject robotMovement;
     public TextMeshProUGUI buttonStart;
 
+    private IK_Solver ikSolver;
+    private PathManager pathManager;
+
+    private Quaternion joint1InitialRotation;
+    private Quaternion joint2InitialRotation;
+    private Quaternion joint3InitialRotation;
+    private Quaternion joint5InitialRotation;
+    private Quaternion joint6InitialRotation;
+
+    private bool initialPoseCached = false;
+
+    private void Start()
+    {
+        CacheReferences();
+        CacheInitialPose();
+        SetStartButtonVisual(false);
+    }
+
+    private void CacheReferences()
+    {
+        if (robotMovement != null && ikSolver == null)
+            ikSolver = robotMovement.GetComponent<IK_Solver>();
+
+        if (pathManager == null)
+            pathManager = FindFirstObjectByType<PathManager>();
+    }
+
+    private void CacheInitialPose()
+    {
+        if (initialPoseCached) return;
+        if (ikSolver == null) return;
+
+        if (ikSolver.joint1Pivot != null)
+            joint1InitialRotation = ikSolver.joint1Pivot.transform.localRotation;
+
+        if (ikSolver.joint2Pivot != null)
+            joint2InitialRotation = ikSolver.joint2Pivot.transform.localRotation;
+
+        if (ikSolver.joint3Pivot != null)
+            joint3InitialRotation = ikSolver.joint3Pivot.transform.localRotation;
+
+        if (ikSolver.joint5Pivot != null)
+            joint5InitialRotation = ikSolver.joint5Pivot.transform.localRotation;
+
+        if (ikSolver.joint6Pivot != null)
+            joint6InitialRotation = ikSolver.joint6Pivot.transform.localRotation;
+
+        initialPoseCached = true;
+    }
+
+
     public void ResetSimulation()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        CacheReferences();
+        CacheInitialPose();
+
+        if (ikSolver != null)
+            ikSolver.enabled = false;
+
+        if (pathManager != null)
+            pathManager.ResetPath();
+
+        RestoreInitialPose();
+
+        SetStartButtonVisual(false);
     }
 
     public void ExitSimulation()
@@ -23,80 +84,72 @@ public class SimulationUI : MonoBehaviour
 #endif
     }
 
-    // Questa funzione viene chiamata dal Bottone UI
     public void StartRobot()
     {
-        if (robotMovement == null) return;
-        IK_Solver ik = robotMovement.GetComponent<IK_Solver>();
-        if (ik == null) return;
+        CacheReferences();
 
-        // Se lo script è spento, lo ACCENDIAMO. Se è acceso, lo SPEGNIAMO.
-        if (!ik.enabled)
+        if (ikSolver == null) return;
+
+        if (!ikSolver.enabled)
+            ActivateRobot();
+        else
+            DeactivateRobot();
+    }
+
+    private void ActivateRobot()
+    {
+        if (ikSolver == null) return;
+
+        ikSolver.enabled = true;
+        SetStartButtonVisual(true);
+    }
+
+    private void DeactivateRobot()
+    {
+        if (ikSolver != null)
+            ikSolver.enabled = false;
+
+        if (pathManager != null)
+            pathManager.EmergencyStop();
+
+        SetStartButtonVisual(false);
+    }
+
+    private void RestoreInitialPose()
+    {
+        if (!initialPoseCached || ikSolver == null) return;
+
+        if (ikSolver.joint1Pivot != null)
+            ikSolver.joint1Pivot.transform.localRotation = joint1InitialRotation;
+
+        if (ikSolver.joint2Pivot != null)
+            ikSolver.joint2Pivot.transform.localRotation = joint2InitialRotation;
+
+        if (ikSolver.joint3Pivot != null)
+            ikSolver.joint3Pivot.transform.localRotation = joint3InitialRotation;
+
+        if (ikSolver.joint5Pivot != null)
+            ikSolver.joint5Pivot.transform.localRotation = joint5InitialRotation;
+
+        if (ikSolver.joint6Pivot != null)
+            ikSolver.joint6Pivot.transform.localRotation = joint6InitialRotation;
+    }
+
+    private void SetStartButtonVisual(bool running)
+    {
+        if (buttonStart == null) return;
+
+        if (running)
         {
-            ActivateRobot(ik);
+            buttonStart.text = "Stop";
+            if (ColorUtility.TryParseHtmlString("#E74C3C", out Color red))
+                buttonStart.color = red;
         }
         else
         {
-            DeactivateRobot(ik);
-        }
-    }
-
-    private void ActivateRobot(IK_Solver ik)
-    {
-        ik.enabled = true;
-        PathManager pathScript = Object.FindFirstObjectByType<PathManager>();
-
-        // UI Update
-        buttonStart.text = "Stop";
-        if (ColorUtility.TryParseHtmlString("#E74C3C", out Color red)) buttonStart.color = red;
-
-        // Start Path Logic
-        if (pathScript != null) pathScript.Play();
-
-        // Start Monitor
-        StopAllCoroutines();
-        StartCoroutine(CheckWhenFinished());
-    }
-
-    private void DeactivateRobot(IK_Solver ik)
-    {
-        ik.enabled = false;
-        PathManager pathScript = Object.FindFirstObjectByType<PathManager>();
-
-        // UI Update
-        buttonStart.text = "Start";
-        if (ColorUtility.TryParseHtmlString("#2ECC71", out Color green)) buttonStart.color = green;
-
-        // Stop Path Logic
-        if (pathScript != null) pathScript.EmergencyStop();
-
-        StopAllCoroutines();
-    }
-
-    private IEnumerator CheckWhenFinished()
-    {
-        PathManager pathScript = Object.FindFirstObjectByType<PathManager>();
-        if (pathScript == null) yield break;
-
-        // ASPETTA: Evita che legga "Complete" se il robot è ancora fermo al traguardo precedente
-        yield return new WaitForSeconds(0.8f);
-
-        while (true)
-        {
-            IK_Solver ik = robotMovement.GetComponent<IK_Solver>();
-            if (ik == null || !ik.enabled) yield break;
-
-            if (pathScript.IsPathComplete())
-            {
-                // Tempo per il rilascio ventosa
-                yield return new WaitForSeconds(1.5f);
-
-                // Spegniamo tutto usando la funzione dedicata
-                DeactivateRobot(ik);
-                yield break;
-            }
-
-            yield return new WaitForSeconds(0.2f);
+            buttonStart.text = "Start";
+            if (ColorUtility.TryParseHtmlString("#2ECC71", out Color green))
+                buttonStart.color = green;
         }
     }
 }
