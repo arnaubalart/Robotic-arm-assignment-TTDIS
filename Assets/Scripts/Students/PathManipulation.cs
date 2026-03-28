@@ -9,15 +9,9 @@ using UnityEditor;
 [RequireComponent(typeof(PathManager))]
 public class PathManipulation : MonoBehaviour
 {
-    [Header("Path Nodes")]
-    [Tooltip("Ordered list of path nodes used by the PathManager.")]
     public List<PathNode> nodes = new List<PathNode>();
-
-    [Header("Node Creation")]
-    [Tooltip("Vertical offset used when creating a new node if no midpoint is available.")]
     public float newNodeYOffset = 0.05f;
-
-    private static readonly Color PreviewLineColor = new Color(0.9f, 0.95f, 1f, 0.75f);
+    public float labelHeight = 0.03f;
 
     private PathManager pathManager;
     private PathNode selectedNode;
@@ -53,10 +47,6 @@ public class PathManipulation : MonoBehaviour
         selectedNode = null;
     }
 
-    // ------------------------------------------------------------
-    // UI BUTTON METHODS
-    // ------------------------------------------------------------
-
     public void AddNodeButton()
     {
         AddNodeAfterSelected();
@@ -71,7 +61,6 @@ public class PathManipulation : MonoBehaviour
     {
         CacheReferences();
         if (pathManager == null) return;
-
         pathManager.Play();
     }
 
@@ -79,14 +68,9 @@ public class PathManipulation : MonoBehaviour
     {
         CacheReferences();
         if (pathManager == null) return;
-
         pathManager.ResetPath();
         ClearSelection();
     }
-
-    // ------------------------------------------------------------
-    // NODE EDITING
-    // ------------------------------------------------------------
 
     public void AddNodeAfterSelected()
     {
@@ -96,24 +80,17 @@ public class PathManipulation : MonoBehaviour
             nodes = new List<PathNode>();
 
         if (nodes.Count < 2)
-        {
-            Debug.LogWarning("[PathManipulation] You need at least Start and Target nodes before adding intermediate nodes.");
             return;
-        }
 
         int insertIndex;
 
         if (selectedNode != null)
         {
             insertIndex = nodes.IndexOf(selectedNode);
-            if (insertIndex < 0)
-                insertIndex = nodes.Count - 1;
-            else
-                insertIndex += 1;
+            insertIndex = insertIndex < 0 ? nodes.Count - 1 : insertIndex + 1;
         }
         else
         {
-            
             insertIndex = nodes.Count - 1;
         }
 
@@ -145,24 +122,17 @@ public class PathManipulation : MonoBehaviour
         CacheReferences();
 
         if (selectedNode == null)
-        {
-            Debug.LogWarning("[PathManipulation] No node selected to delete.");
             return;
-        }
 
         int index = nodes.IndexOf(selectedNode);
         if (index < 0)
         {
-            Debug.LogWarning("[PathManipulation] Selected node is not in the path.");
             selectedNode = null;
             return;
         }
 
         if (index == 0 || index == nodes.Count - 1)
-        {
-            Debug.LogWarning("[PathManipulation] Cannot delete Start or Target node.");
             return;
-        }
 
         PathNode nodeToDelete = selectedNode;
         selectedNode = null;
@@ -231,34 +201,40 @@ public class PathManipulation : MonoBehaviour
             PathNode node = nodes[i];
             if (node == null) continue;
 
-            Vector3 nodePosition = node.transform.position;
+            Gizmos.color = GetNodeColor(node, i);
+            Gizmos.DrawSphere(node.transform.position, 0.01f);
 
-            Gizmos.color = PathNodeColorUtility.GetColor(node, i, nodes.Count);
-            Gizmos.DrawSphere(nodePosition, 0.005f);
-
-            if (i >= nodes.Count - 1 || nodes[i + 1] == null) continue;
-
-            Gizmos.color = PreviewLineColor;
-            Gizmos.DrawLine(nodePosition, nodes[i + 1].transform.position);
+            DrawNodeLabel(node, i);
         }
-
-        if (nodes.Count > 0 && nodes[0] != null)
-            AddTextHandleToNode(nodes[0], "Start");
-
-        for (int i = 1; i < nodes.Count - 1; i++)
-        {
-            if (nodes[i] != null)
-                AddTextHandleToNode(nodes[i], i.ToString());
-        }
-
-        if (nodes.Count > 1 && nodes[nodes.Count - 1] != null)
-            AddTextHandleToNode(nodes[nodes.Count - 1], "Target");
     }
 
-    private void AddTextHandleToNode(PathNode node, string label)
+    private Color GetNodeColor(PathNode node, int index)
+    {
+        if (index == 0) return Color.green;
+        if (index == nodes.Count - 1) return Color.red;
+        if (node.activateSuction) return Color.yellow;
+        if (node.deactivateSuction) return Color.magenta;
+        if (node.waitSeconds > 0f) return new Color(1f, 0.6f, 0.2f, 1f);
+        return Color.cyan;
+    }
+
+    private void DrawNodeLabel(PathNode node, int index)
     {
 #if UNITY_EDITOR
-        Handles.Label(node.transform.position + Vector3.up * 0.01f, label);
+        string title;
+        if (index == 0) title = "Start";
+        else if (index == nodes.Count - 1) title = "Target";
+        else title = $"Node {index}";
+
+        string suctionText = "None";
+        if (node.activateSuction) suctionText = "ON";
+        if (node.deactivateSuction) suctionText = "OFF";
+
+        string waitText = node.waitSeconds > 0f ? node.waitSeconds.ToString("0.0") + "s" : "0s";
+        string label = $"{title}\nAoA {node.angleOfAttack:0}°\nSuction {suctionText}\nWait {waitText}";
+
+        Handles.color = Color.white;
+        Handles.Label(node.transform.position + Vector3.up * labelHeight, label);
 #endif
     }
 }
